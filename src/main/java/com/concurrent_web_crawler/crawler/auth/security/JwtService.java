@@ -36,10 +36,10 @@ public class JwtService {
     public String generateToken(String subject, Map<String, Object> claims, long ttlSeconds) {
         Instant now = Instant.now();
         return Jwts.builder()
-                .setSubject(subject)
-                .setIssuedAt(Date.from(now))
-                .setExpiration(Date.from(now.plusSeconds(ttlSeconds)))
-                .addClaims(claims)
+                .subject(subject)
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(now.plusSeconds(ttlSeconds)))
+                .claims(claims)
                 .signWith(key())
                 .compact();
     }
