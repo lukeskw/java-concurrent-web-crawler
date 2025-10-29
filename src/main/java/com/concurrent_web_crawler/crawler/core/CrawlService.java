@@ -3,8 +3,12 @@ package com.concurrent_web_crawler.crawler.core;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
+import java.io.Serializable;
 import java.util.*;
 import java.util.concurrent.*;
 
@@ -13,6 +17,7 @@ import java.util.concurrent.*;
 public class CrawlService {
 
     private final CrawlerEngine crawlerEngine;
+    private final CacheManager cacheManager;
 
     private final Map<String, CrawlState> states = new ConcurrentHashMap<>();
 
@@ -20,22 +25,34 @@ public class CrawlService {
         validateKeyword(keyword);
         String id = generateId();
         var normalized = keyword.trim();
-        var state = new CrawlState(id, normalized);
+        var state = new CrawlState(id, normalized, this::onStateDone);
         states.put(id, state);
         crawlerEngine.crawlAsync(state);
         return id;
     }
 
-    public CrawlState getState(String id) {
+    @Cacheable(cacheNames = "crawlState", key = "#id")
+    public CrawlStateDto getState(String id) {
         var s = states.get(id);
-        if (s == null) throw new NoSuchElementException("id não encontrado");
-        return s;
+        if (s == null) throw new NoSuchElementException("ID not found");
+        return CrawlStateDto.from(s);
+    }
+
+    private void onStateDone(String id, CrawlState finalState) {
+        Cache inProgress = cacheManager.getCache("crawlState");
+        if (inProgress != null) {
+            inProgress.evict(id);
+        }
+        Cache finalCache = cacheManager.getCache("crawlStateFinal");
+        if (finalCache != null) {
+            finalCache.put(id, CrawlStateDto.from(finalState));
+        }
     }
 
     private static void validateKeyword(String k) {
-        if (k == null) throw new IllegalArgumentException("keyword obrigatória");
+        if (k == null) throw new IllegalArgumentException("Keyword is required");
         int len = k.trim().length();
-        if (len < 4 || len > 32) throw new IllegalArgumentException("keyword deve ter entre 4 e 32 caracteres");
+        if (len < 4 || len > 32) throw new IllegalArgumentException("Keyword must have between 4 and 32 characters");
     }
 
     private static String generateId() {
@@ -56,14 +73,20 @@ public class CrawlService {
         private final ConcurrentLinkedQueue<String> frontier = new ConcurrentLinkedQueue<>();
         private volatile boolean done = false;
 
-        CrawlState(String id, String keyword) {
+        private final DoneCallback doneCallback;
+
+        CrawlState(String id, String keyword, DoneCallback doneCallback) {
             this.id = id;
             this.keyword = keyword;
+            this.doneCallback = doneCallback;
         }
 
         public boolean done() { return done; }
         public List<String> results() { return results.stream().sorted().toList(); }
-        void markDone() { this.done = true; }
+        void markDone() {
+            this.done = true;
+            if (doneCallback != null) doneCallback.onDone(id, this);
+        }
 
         public String id() { return id; }
         public String keyword() { return keyword; }
@@ -72,6 +95,27 @@ public class CrawlService {
 
         public void addResult(String url) {
             results.add(url);
+        }
+
+        @FunctionalInterface
+        public interface DoneCallback {
+            void onDone(String id, CrawlState state);
+        }
+    }
+
+    public record CrawlStateDto(
+            String id,
+            String keyword,
+            List<String> results,
+            List<String> visited,
+            List<String> frontier,
+            boolean done
+    ) implements Serializable {
+        public static CrawlStateDto from(CrawlState s) {
+            List<String> results = new ArrayList<>(s.results());
+            List<String> visited = new ArrayList<>(s.visited());
+            List<String> frontier = new ArrayList<>(s.frontier());
+            return new CrawlStateDto(s.id(), s.keyword(), results, visited, frontier, s.done());
         }
     }
 }
