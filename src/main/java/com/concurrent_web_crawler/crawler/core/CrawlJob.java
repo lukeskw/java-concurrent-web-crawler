@@ -1,13 +1,11 @@
 package com.concurrent_web_crawler.crawler.core;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.ResponseEntity;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
 import java.net.URI;
-import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
@@ -21,10 +19,13 @@ public class CrawlJob {
 
     private static final int MAX_RESULTS = 100;
     private static final int MAX_PAGES = 10_000;
+    private static final int MAX_FRONTIER = 50_000;
 
     private final RestTemplate http;
     private final ExecutorService virtualThreadExecutor;
-    private final URI baseUri;
+    
+    @Value("${crawler.base-url}")
+    private String baseUrl;
 
     private static final Pattern LINK_PATTERN = Pattern.compile(
             "<a\\s+[^>]*?href\\s*=\\s*['\"][^'\"]+['\"][^>]*>",
@@ -32,15 +33,24 @@ public class CrawlJob {
     );
 
     public void start(CrawlService.CrawlState state) {
-        // dispara a mesma orquestração antiga em background
         virtualThreadExecutor.submit(() -> {
-            state.frontier().add(baseUri.toString());
-            submitWave(state);
+            state.frontier().add(baseUrl);
+            runWaves(state);
         });
     }
 
+    private void runWaves(CrawlService.CrawlState state) {
+        while (true) {
+            submitWave(state);
+            if (state.frontier().isEmpty() || !underLimits(state)) {
+                state.markDone();
+                return;
+            }
+        }
+    }
+
     private void submitWave(CrawlService.CrawlState state) {
-        var phaser = new Phaser(1); // registrar a controladora
+        var phaser = new Phaser(1);
         while (!state.frontier().isEmpty() && underLimits(state)) {
             String url = state.frontier().poll();
             if (url == null) break;
@@ -51,7 +61,6 @@ public class CrawlJob {
                 try {
                     processUrl(state, url);
                 } catch (Exception ignored) {
-                    // falhas de rede/parse são ignoradas
                 } finally {
                     phaser.arriveAndDeregister();
                 }
@@ -75,8 +84,10 @@ public class CrawlJob {
     }
 
     private void processUrl(CrawlService.CrawlState state, String urlStr) {
-        ResponseEntity<String> resp = http.getForEntity(urlStr, String.class);
+        var resp = http.getForEntity(urlStr, String.class);
         if (!resp.getStatusCode().is2xxSuccessful() || resp.getBody() == null) return;
+        var ct = resp.getHeaders().getContentType();
+        if (ct == null || !"text".equalsIgnoreCase(ct.getType()) || !"html".equalsIgnoreCase(ct.getSubtype())) return;
 
         String body = resp.getBody();
         if (containsKeyword(body, state.keyword())) {
@@ -85,9 +96,10 @@ public class CrawlJob {
         for (String link : extractLinks(body)) {
             String normalized = normalizeAndFilterUrl(link);
             if (normalized == null) continue;
-            if (!state.visited().contains(normalized)) {
-                state.frontier().add(normalized);
-            }
+            if (state.visited().contains(normalized)) continue;
+            if (state.frontier().size() >= MAX_FRONTIER) continue;
+            if (!underLimits(state)) continue;
+            state.frontier().add(normalized);
         }
     }
 
@@ -109,7 +121,10 @@ public class CrawlJob {
                     char quote = href.charAt(open);
                     int close = href.indexOf(quote, open + 1);
                     if (close > open + 1) {
-                        links.add(href.substring(open + 1, close).trim());
+                        String v = href.substring(open + 1, close).trim();
+                        if (!v.isEmpty() && !v.startsWith("#") && !v.startsWith("javascript:") && !v.startsWith("mailto:")) {
+                            links.add(v);
+                        }
                     }
                 }
             }
@@ -119,31 +134,32 @@ public class CrawlJob {
 
     private String normalizeAndFilterUrl(String href) {
         try {
-            String decoded = URLDecoder.decode(href, StandardCharsets.UTF_8);
-            URI uri = baseUri.resolve(decoded);
-            if (!sameBase(uri)) return null;
-            URI normalized = new URI(
-                    uri.getScheme(),
-                    uri.getUserInfo(),
-                    uri.getHost(),
-                    uri.getPort(),
-                    ensureLeadingSlash(uri.getPath()),
-                    uri.getQuery(),
+            URI base = URI.create(baseUrl);
+            URI resolved = base.resolve(href);
+            if (!sameBase(base, resolved)) return null;
+            URI normalized = resolved.normalize();
+            normalized = new URI(
+                    normalized.getScheme(),
+                    normalized.getUserInfo(),
+                    normalized.getHost(),
+                    normalized.getPort(),
+                    ensureLeadingSlash(normalized.getPath()),
+                    normalized.getQuery(),
                     null
             );
             String s = normalized.toString();
-            if (!s.startsWith(baseUri.toString())) return null;
+            if (!s.startsWith(base.toString())) return null;
             return s;
         } catch (Exception e) {
             return null;
         }
     }
 
-    private boolean sameBase(URI uri) {
-        if (uri.getScheme() == null) return true; // relativo
-        if (!baseUri.getScheme().equalsIgnoreCase(uri.getScheme())) return false;
-        if (!safeEquals(baseUri.getHost(), uri.getHost())) return false;
-        int basePort = baseUri.getPort() == -1 ? defaultPort(baseUri) : baseUri.getPort();
+    private static boolean sameBase(URI base, URI uri) {
+        if (uri.getScheme() == null && uri.getHost() == null) return true; // relativo
+        if (uri.getScheme() != null && !base.getScheme().equalsIgnoreCase(uri.getScheme())) return false;
+        if (!safeEquals(base.getHost(), uri.getHost())) return false;
+        int basePort = base.getPort() == -1 ? defaultPort(base) : base.getPort();
         int uPort = uri.getPort() == -1 ? defaultPort(uri) : uri.getPort();
         return basePort == uPort;
     }
