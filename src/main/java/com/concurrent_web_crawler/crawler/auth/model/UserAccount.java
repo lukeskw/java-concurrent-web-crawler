@@ -29,6 +29,7 @@ public class UserAccount {
     private String passwordHash;
 
     @Column(nullable = false)
+    @Builder.Default
     private boolean enabled = true;
 
     @ManyToMany(fetch = FetchType.EAGER)
