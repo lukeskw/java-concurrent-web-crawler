@@ -7,9 +7,11 @@ import jakarta.validation.constraints.Size;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
-import org.springframework.web.bind.annotation.*;
 import org.springframework.http.ResponseEntity;
-import java.util.Map;
+import org.springframework.web.bind.annotation.*;
+import java.net.URI;
+import java.util.List;
+import java.util.NoSuchElementException;
 
 @RestController
 @RequiredArgsConstructor
@@ -19,34 +21,24 @@ public class CrawlController {
     private final CrawlService crawlService;
 
     @PostMapping(path = "/crawl", consumes = MediaType.APPLICATION_JSON_VALUE)
-    public Map<String, String> start(@Valid @RequestBody StartRequest body) {
+    public ResponseEntity<StartResponse> start(@Valid @RequestBody StartRequest body) {
         String id = crawlService.start(body.getKeyword());
-        return Map.of("id", id);
+        return ResponseEntity.accepted()
+                .location(URI.create("/crawl/" + id))
+                .body(new StartResponse(id));
     }
 
     @GetMapping("/crawl/{id}")
-    public ResponseEntity<?> get(@PathVariable String id) {
+    public ResponseEntity<CrawlResponse> get(@PathVariable String id) {
         try {
             var state = crawlService.getState(id);
             return ResponseEntity.ok(new CrawlResponse(
                     state.id(),
-                    state.done() ? "done" : "active",
+                    state.done() ? CrawlStatus.DONE : CrawlStatus.ACTIVE,
                     state.results()
             ));
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.status(org.springframework.http.HttpStatus.NOT_FOUND)
-                    .body(Map.of(
-                            "error", "crawl_not_found",
-                            "message", e.getMessage() != null ? e.getMessage() : "Crawl id não encontrado",
-                            "id", id
-                    ));
-        } catch (Exception e) {
-            return ResponseEntity.status(org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of(
-                            "error", "crawl_error",
-                            "message", e.getMessage() != null ? e.getMessage() : "Erro ao obter estado do crawl",
-                            "id", id
-                    ));
+        } catch (NoSuchElementException e) {
+            return ResponseEntity.notFound().build();
         }
     }
 
@@ -57,5 +49,9 @@ public class CrawlController {
         private String keyword;
     }
 
-    public record CrawlResponse(String id, String status, java.util.List<String> urls) {}
+    public record StartResponse(String id) {}
+
+    public enum CrawlStatus { ACTIVE, DONE }
+
+    public record CrawlResponse(String id, CrawlStatus status, List<String> urls) {}
 }
