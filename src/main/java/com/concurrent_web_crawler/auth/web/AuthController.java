@@ -1,13 +1,20 @@
 package com.concurrent_web_crawler.auth.web;
 
+import com.concurrent_web_crawler.auth.dto.LoginErrorResponse;
+import com.concurrent_web_crawler.auth.dto.LoginRequest;
+import com.concurrent_web_crawler.auth.dto.LoginResponse;
+import com.concurrent_web_crawler.auth.dto.LogoutErrorResponse;
+import com.concurrent_web_crawler.auth.dto.LogoutOkResponse;
+import com.concurrent_web_crawler.auth.dto.MeResponse;
+import com.concurrent_web_crawler.auth.port.out.LoginResponseUnion;
+import com.concurrent_web_crawler.auth.port.out.LogoutResponseUnion;
 import com.concurrent_web_crawler.auth.security.JwtAuthFilter;
 import com.concurrent_web_crawler.auth.security.JwtProperties;
-import com.concurrent_web_crawler.auth.service.JwtService;
 import com.concurrent_web_crawler.auth.security.RedisTokenBlacklist;
+import com.concurrent_web_crawler.auth.service.JwtService;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jws;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.*;
 import org.springframework.security.core.Authentication;
@@ -77,12 +84,12 @@ public class AuthController {
 
     @PostMapping("/logout")
     public ResponseEntity<? extends LogoutResponseUnion> logout(
-            @RequestHeader(name = "Authorization", required = false) String authz,
+            @RequestHeader(name = "Authorization", required = false) String auth,
             @RequestHeader(name = "X-Refresh-Token", required = false) String refreshTokenHeader) {
-        if (authz == null || !authz.startsWith("Bearer ")) {
+        if (auth == null || !auth.startsWith("Bearer ")) {
             return ResponseEntity.badRequest().body(new LogoutErrorResponse("missing_bearer"));
         }
-        String accessToken = authz.substring(7);
+        String accessToken = auth.substring(7);
         try {
             Jws<io.jsonwebtoken.Claims> accessJws = jwtService.parse(accessToken);
             String accessJti = accessJws.getPayload().getId();
@@ -107,24 +114,11 @@ public class AuthController {
 
     @GetMapping("/me")
     public ResponseEntity<MeResponse> me(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(401).build();
+        }
         String username = authentication.getName();
         List<String> roles = authentication.getAuthorities().stream().map(GrantedAuthority::getAuthority).toList();
         return ResponseEntity.ok(new MeResponse(username, roles));
     }
-
-    public record LoginRequest(@NotBlank String usernameOrEmail, @NotBlank String password) {}
-
-    public record LoginResponse(String token_type, String access_token, long expires_in, String refresh_token) implements LoginResponseUnion {}
-
-    public record LoginErrorResponse(String error, String message) implements LoginResponseUnion {}
-
-    public interface LoginResponseUnion {}
-
-    public record LogoutOkResponse(String status) implements LogoutResponseUnion {}
-
-    public record LogoutErrorResponse(String error) implements LogoutResponseUnion {}
-
-    public interface LogoutResponseUnion {}
-
-    public record MeResponse(String username, List<String> roles) {}
 }

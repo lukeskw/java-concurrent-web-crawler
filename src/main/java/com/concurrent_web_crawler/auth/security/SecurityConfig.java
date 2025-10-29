@@ -39,6 +39,7 @@ public class SecurityConfig {
             .headers(h -> h.frameOptions(HeadersConfigurer.FrameOptionsConfig::sameOrigin))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/auth/login", "/auth/logout", "/auth/me").permitAll()
+                .requestMatchers("/auth/login", "/auth/logout").permitAll()
                 .requestMatchers(HttpMethod.GET, "/actuator/health").permitAll()
                 .anyRequest().authenticated()
             )

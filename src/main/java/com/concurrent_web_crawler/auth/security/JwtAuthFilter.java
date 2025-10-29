@@ -35,15 +35,15 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     }
 
     @Override
-    protected void doFilterInternal(@NonNull HttpServletRequest request,
-                                    @NonNull HttpServletResponse response,
-                                    @NonNull FilterChain chain)
-            throws ServletException, IOException {
-        String uri = request.getRequestURI();
-        if (uri.equals("/auth/login") || uri.equals("/auth/me") || uri.equals("/auth/logout") || uri.equals("/actuator/health")) {
-            chain.doFilter(request, response);
-            return;
-        }
+        protected void doFilterInternal(@NonNull HttpServletRequest request,
+                                        @NonNull HttpServletResponse response,
+                                        @NonNull FilterChain chain)
+                throws ServletException, IOException {
+            String uri = request.getRequestURI();
+           if (uri.equals("/auth/login") || uri.equals("/auth/logout") || uri.equals("/actuator/health")) {
+                chain.doFilter(request, response);
+                return;
+            }
 
         String header = request.getHeader(HttpHeaders.AUTHORIZATION);
         if (StringUtils.hasText(header) && header.startsWith("Bearer ")) {
