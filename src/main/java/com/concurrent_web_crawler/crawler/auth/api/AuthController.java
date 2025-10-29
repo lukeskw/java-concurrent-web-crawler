@@ -6,16 +6,17 @@ import com.concurrent_web_crawler.crawler.auth.security.JwtService;
 import com.concurrent_web_crawler.crawler.auth.security.RedisTokenBlacklist;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jws;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.*;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -40,86 +41,90 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody LoginRequest req) {
+    public ResponseEntity<LoginResponseUnion> login(@Valid @RequestBody LoginRequest req) {
         try {
             Authentication auth = authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(req.usernameOrEmail(), req.password()));
-            UserDetails principal = (UserDetails) auth.getPrincipal();
+            Object principalObj = auth.getPrincipal();
+            String username = (principalObj instanceof UserDetails ud) ? ud.getUsername() : auth.getName();
+            List<String> roles = auth.getAuthorities().stream().map(GrantedAuthority::getAuthority).toList();
+
             String jti = JwtAuthFilter.newJti();
             String access = jwtService.generateToken(
-                    principal.getUsername(),
+                    username,
                     Map.of(
                             Claims.ID, jti,
-                            "roles", principal.getAuthorities().stream().map(a -> a.getAuthority()).toList()
+                            "roles", roles
                     ),
                     props.getAccessTtlSeconds()
             );
             String refresh = jwtService.generateToken(
-                    principal.getUsername(),
+                    username,
                     Map.of(
                             Claims.ID, "r-" + jti
                     ),
                     props.getRefreshTtlSeconds()
             );
-            return ResponseEntity.ok(Map.of(
-                    "token_type", "Bearer",
-                    "access_token", access,
-                    "expires_in", props.getAccessTtlSeconds(),
-                    "refresh_token", refresh
-            ));
-        } catch (BadCredentialsException e) {
-            return ResponseEntity.status(401).body(Map.of(
-                    "error", "bad_credentials",
-                    "message", "Usuário ou senha inválidos"
-            ));
-        } catch (UsernameNotFoundException e) {
-            return ResponseEntity.status(401).body(Map.of(
-                    "error", "user_not_found",
-                    "message", "Usuário não encontrado"
-            ));
+            return ResponseEntity.ok(new LoginResponse("Bearer", access, props.getAccessTtlSeconds(), refresh));
+        } catch (BadCredentialsException | UsernameNotFoundException e) {
+            return ResponseEntity.status(401).body(new LoginErrorResponse("invalid_credentials", "Invalid username or password"));
         } catch (DisabledException e) {
-            return ResponseEntity.status(403).body(Map.of(
-                    "error", "user_disabled",
-                    "message", "Usuário desabilitado"
-            ));
+            return ResponseEntity.status(403).body(new LoginErrorResponse("user_disabled", "User disabled"));
         } catch (Exception e) {
-            return ResponseEntity.status(500).body(Map.of(
-                    "error", "auth_error",
-                    "message", e.getMessage()
-            ));
+            return ResponseEntity.status(500).body(new LoginErrorResponse("auth_error", "Authentication error"));
         }
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<?> logout(@RequestHeader(name = "Authorization", required = false) String authz) {
+    public ResponseEntity<? extends LogoutResponseUnion> logout(
+            @RequestHeader(name = "Authorization", required = false) String authz,
+            @RequestHeader(name = "X-Refresh-Token", required = false) String refreshTokenHeader) {
         if (authz == null || !authz.startsWith("Bearer ")) {
-            return ResponseEntity.badRequest().body(Map.of("error", "missing bearer"));
+            return ResponseEntity.badRequest().body(new LogoutErrorResponse("missing_bearer"));
         }
-        String token = authz.substring(7);
+        String accessToken = authz.substring(7);
         try {
-            Jws<io.jsonwebtoken.Claims> jws = jwtService.parse(token);
-            String jti = jws.getPayload().getId();
-            if (jti != null) {
-                blacklist.blacklist(jti, JwtAuthFilter.remainingTtl(jws));
+            Jws<io.jsonwebtoken.Claims> accessJws = jwtService.parse(accessToken);
+            String accessJti = accessJws.getPayload().getId();
+            if (accessJti != null) {
+                blacklist.blacklist(accessJti, JwtAuthFilter.remainingTtl(accessJws));
             }
-            return ResponseEntity.ok(Map.of("status", "logged_out"));
+            if (refreshTokenHeader != null && !refreshTokenHeader.isBlank()) {
+                String refreshToken = refreshTokenHeader.startsWith("Bearer ") ? refreshTokenHeader.substring(7) : refreshTokenHeader;
+                try {
+                    Jws<io.jsonwebtoken.Claims> refreshJws = jwtService.parse(refreshToken);
+                    String refreshJti = refreshJws.getPayload().getId();
+                    if (refreshJti != null && refreshJti.startsWith("r-")) {
+                        blacklist.blacklist(refreshJti, JwtAuthFilter.remainingTtl(refreshJws));
+                    }
+                } catch (Exception ignored) { }
+            }
+            return ResponseEntity.ok(new LogoutOkResponse("logged_out"));
         } catch (Exception e) {
-            return ResponseEntity.status(401).body(Map.of("error", "invalid_token"));
+            return ResponseEntity.status(401).body(new LogoutErrorResponse("invalid_token"));
         }
     }
 
     @GetMapping("/me")
-    public ResponseEntity<?> me(Authentication authentication) {
-        if (authentication == null || !authentication.isAuthenticated()) {
-            return ResponseEntity.status(401).build();
-        }
-        UserDetails principal = (UserDetails) authentication.getPrincipal();
-        List<String> roles = principal.getAuthorities().stream().map(a -> a.getAuthority()).toList();
-        return ResponseEntity.ok(Map.of(
-                "username", principal.getUsername(),
-                "roles", roles
-        ));
+    public ResponseEntity<MeResponse> me(Authentication authentication) {
+        String username = authentication.getName();
+        List<String> roles = authentication.getAuthorities().stream().map(GrantedAuthority::getAuthority).toList();
+        return ResponseEntity.ok(new MeResponse(username, roles));
     }
 
     public record LoginRequest(@NotBlank String usernameOrEmail, @NotBlank String password) {}
+
+    public record LoginResponse(String token_type, String access_token, long expires_in, String refresh_token) implements LoginResponseUnion {}
+
+    public record LoginErrorResponse(String error, String message) implements LoginResponseUnion {}
+
+    public interface LoginResponseUnion {}
+
+    public record LogoutOkResponse(String status) implements LogoutResponseUnion {}
+
+    public record LogoutErrorResponse(String error) implements LogoutResponseUnion {}
+
+    public interface LogoutResponseUnion {}
+
+    public record MeResponse(String username, List<String> roles) {}
 }
