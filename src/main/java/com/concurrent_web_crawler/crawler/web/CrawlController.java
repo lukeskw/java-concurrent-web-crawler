@@ -1,10 +1,9 @@
-package com.concurrent_web_crawler.crawler.api;
+package com.concurrent_web_crawler.crawler.web;
 
-import com.concurrent_web_crawler.crawler.core.CrawlService;
+import com.concurrent_web_crawler.crawler.service.CrawlService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -21,8 +20,8 @@ public class CrawlController {
     private final CrawlService crawlService;
 
     @PostMapping(path = "/crawl", consumes = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<StartResponse> start(@Valid @RequestBody StartRequest body) {
-        String id = crawlService.start(body.getKeyword());
+    public ResponseEntity<StartResponse> start(@Valid @RequestBody StartCrawlRequest body) {
+        String id = crawlService.start(body.keyword());
         return ResponseEntity.accepted()
                 .location(URI.create("/crawl/" + id))
                 .body(new StartResponse(id));
@@ -42,12 +41,8 @@ public class CrawlController {
         }
     }
 
-    @Data
-    public static class StartRequest {
-        @NotBlank
-        @Size(min = 4, max = 32)
-        private String keyword;
-    }
+
+    public record StartCrawlRequest(@NotBlank @Size(min = 4, max = 32) String keyword) {}
 
     public record StartResponse(String id) {}
 

@@ -1,4 +1,4 @@
-package com.concurrent_web_crawler.crawler;
+package com.concurrent_web_crawler;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;

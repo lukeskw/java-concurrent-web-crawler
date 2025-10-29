@@ -1,5 +1,7 @@
 package com.concurrent_web_crawler.crawler.core;
 
+import com.concurrent_web_crawler.crawler.infra.CrawlJob;
+import com.concurrent_web_crawler.crawler.service.CrawlService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -10,7 +12,6 @@ public class CrawlerEngine {
     private final CrawlJob crawlJob;
 
     public void crawlAsync(CrawlService.CrawlState state) {
-        // mantém a API rápida e usa a mesma lógica antiga dentro do job
         crawlJob.start(state);
     }
 }

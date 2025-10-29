@@ -1,6 +1,6 @@
-package com.concurrent_web_crawler.crawler.auth.repository;
+package com.concurrent_web_crawler.auth.repository;
 
-import com.concurrent_web_crawler.crawler.auth.model.UserAccount;
+import com.concurrent_web_crawler.auth.model.UserAccount;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;

@@ -1,4 +1,4 @@
-package com.concurrent_web_crawler.crawler.exceptions;
+package com.concurrent_web_crawler.shared.exception;
 
 import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;

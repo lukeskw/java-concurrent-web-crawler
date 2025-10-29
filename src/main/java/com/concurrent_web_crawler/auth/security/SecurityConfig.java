@@ -1,6 +1,7 @@
-package com.concurrent_web_crawler.crawler.auth.security;
+package com.concurrent_web_crawler.auth.security;
 
-import com.concurrent_web_crawler.crawler.auth.service.UserDetailsServiceImpl;
+import com.concurrent_web_crawler.auth.service.JwtService;
+import com.concurrent_web_crawler.auth.service.UserDetailsServiceImpl;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;

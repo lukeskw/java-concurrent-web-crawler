@@ -1,5 +1,6 @@
-package com.concurrent_web_crawler.crawler.core;
+package com.concurrent_web_crawler.crawler.infra;
 
+import com.concurrent_web_crawler.crawler.service.CrawlService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -156,7 +157,7 @@ public class CrawlJob {
     }
 
     private static boolean sameBase(URI base, URI uri) {
-        if (uri.getScheme() == null && uri.getHost() == null) return true; // relativo
+        if (uri.getScheme() == null && uri.getHost() == null) return true;
         if (uri.getScheme() != null && !base.getScheme().equalsIgnoreCase(uri.getScheme())) return false;
         if (!safeEquals(base.getHost(), uri.getHost())) return false;
         int basePort = base.getPort() == -1 ? defaultPort(base) : base.getPort();

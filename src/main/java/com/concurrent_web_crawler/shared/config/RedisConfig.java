@@ -1,4 +1,4 @@
-package com.concurrent_web_crawler.crawler.config;
+package com.concurrent_web_crawler.shared.config;
 
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.EnableCaching;

@@ -1,5 +1,6 @@
-package com.concurrent_web_crawler.crawler.core;
+package com.concurrent_web_crawler.crawler.service;
 
+import com.concurrent_web_crawler.crawler.core.CrawlerEngine;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
@@ -83,7 +84,7 @@ public class CrawlService {
 
         public boolean done() { return done; }
         public List<String> results() { return results.stream().sorted().toList(); }
-        void markDone() {
+        public void markDone() {
             this.done = true;
             if (doneCallback != null) doneCallback.onDone(id, this);
         }

@@ -1,5 +1,6 @@
-package com.concurrent_web_crawler.crawler.auth.security;
+package com.concurrent_web_crawler.auth.service;
 
+import com.concurrent_web_crawler.auth.security.JwtProperties;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.stereotype.Service;

@@ -1,4 +1,4 @@
-package com.concurrent_web_crawler.crawler.auth.security;
+package com.concurrent_web_crawler.auth.security;
 
 import lombok.Getter;
 import lombok.Setter;

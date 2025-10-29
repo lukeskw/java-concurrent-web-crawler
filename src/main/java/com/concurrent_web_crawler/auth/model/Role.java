@@ -1,4 +1,4 @@
-package com.concurrent_web_crawler.crawler.auth.model;
+package com.concurrent_web_crawler.auth.model;
 
 import jakarta.persistence.*;
 import lombok.*;

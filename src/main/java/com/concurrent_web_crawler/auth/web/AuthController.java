@@ -1,9 +1,9 @@
-package com.concurrent_web_crawler.crawler.auth.api;
+package com.concurrent_web_crawler.auth.web;
 
-import com.concurrent_web_crawler.crawler.auth.security.JwtAuthFilter;
-import com.concurrent_web_crawler.crawler.auth.security.JwtProperties;
-import com.concurrent_web_crawler.crawler.auth.security.JwtService;
-import com.concurrent_web_crawler.crawler.auth.security.RedisTokenBlacklist;
+import com.concurrent_web_crawler.auth.security.JwtAuthFilter;
+import com.concurrent_web_crawler.auth.security.JwtProperties;
+import com.concurrent_web_crawler.auth.service.JwtService;
+import com.concurrent_web_crawler.auth.security.RedisTokenBlacklist;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jws;
 import jakarta.validation.Valid;

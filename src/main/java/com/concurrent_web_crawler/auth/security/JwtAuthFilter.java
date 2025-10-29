@@ -1,5 +1,6 @@
-package com.concurrent_web_crawler.crawler.auth.security;
+package com.concurrent_web_crawler.auth.security;
 
+import com.concurrent_web_crawler.auth.service.JwtService;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.JwtException;
