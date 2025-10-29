@@ -1,6 +1,7 @@
-package com.concurrent_web_crawler.crawler.infra;
+package com.concurrent_web_crawler.crawler.infra.executor;
 
-import com.concurrent_web_crawler.crawler.service.CrawlService;
+import com.concurrent_web_crawler.crawler.model.CrawlState;
+import com.concurrent_web_crawler.crawler.port.out.CrawlStarterPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -16,15 +17,15 @@ import java.util.regex.Pattern;
 
 @Component
 @RequiredArgsConstructor
-public class CrawlJob {
+public class CrawlJob implements CrawlStarterPort {
 
     private static final int MAX_RESULTS = 100;
-    private static final int MAX_PAGES = 10_000;
+    private static final int MAX_PAGES   = 10_000;
     private static final int MAX_FRONTIER = 50_000;
 
     private final RestTemplate http;
     private final ExecutorService virtualThreadExecutor;
-    
+
     @Value("${crawler.base-url}")
     private String baseUrl;
 
@@ -33,29 +34,27 @@ public class CrawlJob {
             Pattern.CASE_INSENSITIVE
     );
 
-    public void start(CrawlService.CrawlState state) {
+    @Override
+    public void start(CrawlState state) {
         virtualThreadExecutor.submit(() -> {
-            state.frontier().add(baseUrl);
+            state.getFrontier().add(baseUrl);
             runWaves(state);
         });
     }
 
-    private void runWaves(CrawlService.CrawlState state) {
-        while (true) {
+    private void runWaves(CrawlState state) {
+        while (!state.getFrontier().isEmpty() && underLimits(state)) {
             submitWave(state);
-            if (state.frontier().isEmpty() || !underLimits(state)) {
-                state.markDone();
-                return;
-            }
         }
+        state.markDone(); // mark once, idempotent
     }
 
-    private void submitWave(CrawlService.CrawlState state) {
+    private void submitWave(CrawlState state) {
         var phaser = new Phaser(1);
-        while (!state.frontier().isEmpty() && underLimits(state)) {
-            String url = state.frontier().poll();
+        while (!state.getFrontier().isEmpty() && underLimits(state)) {
+            String url = state.getFrontier().poll();
             if (url == null) break;
-            if (!state.visited().add(url)) continue;
+            if (!state.getVisited().add(url)) continue;
 
             phaser.register();
             virtualThreadExecutor.submit(() -> {
@@ -73,34 +72,29 @@ public class CrawlJob {
         } catch (InterruptedException ie) {
             Thread.currentThread().interrupt();
         }
-        if (!state.frontier().isEmpty() && underLimits(state)) {
-            submitWave(state);
-            return;
-        }
-        state.markDone();
     }
 
-    private boolean underLimits(CrawlService.CrawlState s) {
-        return s.results().size() < MAX_RESULTS && s.visited().size() < MAX_PAGES;
+    private static boolean underLimits(CrawlState s) {
+        return s.resultsCount() < MAX_RESULTS && s.getVisited().size() < MAX_PAGES;
     }
 
-    private void processUrl(CrawlService.CrawlState state, String urlStr) {
+    private void processUrl(CrawlState state, String urlStr) {
         var resp = http.getForEntity(urlStr, String.class);
         if (!resp.getStatusCode().is2xxSuccessful() || resp.getBody() == null) return;
         var ct = resp.getHeaders().getContentType();
         if (ct == null || !"text".equalsIgnoreCase(ct.getType()) || !"html".equalsIgnoreCase(ct.getSubtype())) return;
 
         String body = resp.getBody();
-        if (containsKeyword(body, state.keyword())) {
+        if (containsKeyword(body, state.getKeyword())) {
             state.addResult(urlStr);
         }
         for (String link : extractLinks(body)) {
             String normalized = normalizeAndFilterUrl(link);
             if (normalized == null) continue;
-            if (state.visited().contains(normalized)) continue;
-            if (state.frontier().size() >= MAX_FRONTIER) continue;
+            if (state.getVisited().contains(normalized)) continue;
+            if (state.getFrontier().size() >= MAX_FRONTIER) continue;
             if (!underLimits(state)) continue;
-            state.frontier().add(normalized);
+            state.getFrontier().add(normalized);
         }
     }
 

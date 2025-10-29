@@ -1,15 +1,16 @@
 package com.concurrent_web_crawler.crawler.web;
 
+import com.concurrent_web_crawler.crawler.dto.CrawlResponse;
+import com.concurrent_web_crawler.crawler.dto.StartCrawlRequest;
+import com.concurrent_web_crawler.crawler.dto.StartResponse;
+import com.concurrent_web_crawler.crawler.enumerator.CrawlStatus;
 import com.concurrent_web_crawler.crawler.service.CrawlService;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.net.URI;
-import java.util.List;
 import java.util.NoSuchElementException;
 
 @RestController
@@ -40,13 +41,4 @@ public class CrawlController {
             return ResponseEntity.notFound().build();
         }
     }
-
-
-    public record StartCrawlRequest(@NotBlank @Size(min = 4, max = 32) String keyword) {}
-
-    public record StartResponse(String id) {}
-
-    public enum CrawlStatus { ACTIVE, DONE }
-
-    public record CrawlResponse(String id, CrawlStatus status, List<String> urls) {}
 }

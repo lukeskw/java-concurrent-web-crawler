@@ -1,9 +1,8 @@
 package com.concurrent_web_crawler.crawler.service;
 
-import com.concurrent_web_crawler.crawler.core.CrawlerEngine;
-import lombok.Getter;
+import com.concurrent_web_crawler.crawler.model.CrawlState;
+import com.concurrent_web_crawler.crawler.port.out.CrawlStarterPort;
 import lombok.RequiredArgsConstructor;
-import lombok.Setter;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.Cacheable;
@@ -11,13 +10,14 @@ import org.springframework.stereotype.Service;
 
 import java.io.Serializable;
 import java.util.*;
-import java.util.concurrent.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ThreadLocalRandom;
 
 @Service
 @RequiredArgsConstructor
 public class CrawlService {
 
-    private final CrawlerEngine crawlerEngine;
+    private final CrawlStarterPort crawlStarter;
     private final CacheManager cacheManager;
 
     private final Map<String, CrawlState> states = new ConcurrentHashMap<>();
@@ -28,7 +28,7 @@ public class CrawlService {
         var normalized = keyword.trim();
         var state = new CrawlState(id, normalized, this::onStateDone);
         states.put(id, state);
-        crawlerEngine.crawlAsync(state);
+        crawlStarter.start(state); // kicks off async work via out port
         return id;
     }
 
@@ -41,13 +41,10 @@ public class CrawlService {
 
     private void onStateDone(String id, CrawlState finalState) {
         Cache inProgress = cacheManager.getCache("crawlState");
-        if (inProgress != null) {
-            inProgress.evict(id);
-        }
+        if (inProgress != null) inProgress.evict(id);
+
         Cache finalCache = cacheManager.getCache("crawlStateFinal");
-        if (finalCache != null) {
-            finalCache.put(id, CrawlStateDto.from(finalState));
-        }
+        if (finalCache != null) finalCache.put(id, CrawlStateDto.from(finalState));
     }
 
     private static void validateKeyword(String k) {
@@ -64,46 +61,6 @@ public class CrawlService {
         return sb.toString();
     }
 
-    @Getter
-    @Setter
-    public static final class CrawlState {
-        private final String id;
-        private final String keyword;
-        private final Set<String> results = ConcurrentHashMap.newKeySet();
-        private final Set<String> visited = ConcurrentHashMap.newKeySet();
-        private final ConcurrentLinkedQueue<String> frontier = new ConcurrentLinkedQueue<>();
-        private volatile boolean done = false;
-
-        private final DoneCallback doneCallback;
-
-        CrawlState(String id, String keyword, DoneCallback doneCallback) {
-            this.id = id;
-            this.keyword = keyword;
-            this.doneCallback = doneCallback;
-        }
-
-        public boolean done() { return done; }
-        public List<String> results() { return results.stream().sorted().toList(); }
-        public void markDone() {
-            this.done = true;
-            if (doneCallback != null) doneCallback.onDone(id, this);
-        }
-
-        public String id() { return id; }
-        public String keyword() { return keyword; }
-        public Set<String> visited() { return visited; }
-        public ConcurrentLinkedQueue<String> frontier() { return frontier; }
-
-        public void addResult(String url) {
-            results.add(url);
-        }
-
-        @FunctionalInterface
-        public interface DoneCallback {
-            void onDone(String id, CrawlState state);
-        }
-    }
-
     public record CrawlStateDto(
             String id,
             String keyword,
@@ -114,9 +71,9 @@ public class CrawlService {
     ) implements Serializable {
         public static CrawlStateDto from(CrawlState s) {
             List<String> results = new ArrayList<>(s.results());
-            List<String> visited = new ArrayList<>(s.visited());
-            List<String> frontier = new ArrayList<>(s.frontier());
-            return new CrawlStateDto(s.id(), s.keyword(), results, visited, frontier, s.done());
+            List<String> visited = new ArrayList<>(s.getVisited());
+            List<String> frontier = new ArrayList<>(s.getFrontier());
+            return new CrawlStateDto(s.getId(), s.getKeyword(), results, visited, frontier, s.done());
         }
     }
 }
