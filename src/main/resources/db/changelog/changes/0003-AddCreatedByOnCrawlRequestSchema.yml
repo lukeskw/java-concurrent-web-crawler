@@ -1,0 +1,26 @@
+databaseChangeLog:
+  - changeSet:
+      id: 002-add-created-by-crawl-request
+      author: lukeskw
+      changes:
+        - addColumn:
+            tableName: crawl_request
+            columns:
+              - column:
+                  name: created_by
+                  type: bigint
+                  constraints:
+                    nullable: true
+        - addForeignKeyConstraint:
+            baseTableName: crawl_request
+            baseColumnNames: created_by
+            referencedTableName: users
+            referencedColumnNames: id
+            constraintName: fk_crawl_request_created_by
+            onDelete: SET NULL
+        - createIndex:
+            tableName: crawl_request
+            indexName: ix_crawl_request_created_by
+            columns:
+              - column:
+                  name: created_by

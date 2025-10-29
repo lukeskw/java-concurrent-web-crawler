@@ -1,0 +1,47 @@
+databaseChangeLog:
+  - changeSet:
+      id: 001-create-crawl-request
+      author: lukeskw
+      changes:
+        - createTable:
+            tableName: crawl_request
+            columns:
+              - column:
+                  name: id
+                  type: BIGSERIAL
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: keyword_normalized
+                  type: varchar(512)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: status
+                  type: varchar(32)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: result_json
+                  type: jsonb
+              - column:
+                  name: created_at
+                  type: timestamp
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: timestamp
+                  constraints:
+                    nullable: false
+        - addUniqueConstraint:
+            tableName: crawl_request
+            columnNames: keyword_normalized
+            constraintName: ux_crawl_request_keyword_normalized
+        - createIndex:
+            tableName: crawl_request
+            indexName: ix_crawl_request_status
+            columns:
+              - column:
+                  name: status

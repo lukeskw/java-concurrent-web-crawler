@@ -1,5 +1,10 @@
 databaseChangeLog:
-  # Mantém as mudanças separadas por arquivo na pasta "changes"
-  - includeAll:
-      path: changes
+  - include:
+      file: changes/0001-UserRoleManagementSchema.yml
+      relativeToChangelogFile: true
+  - include:
+      file: changes/0002-CrawlRequestSchema.yml
+      relativeToChangelogFile: true
+  - include:
+      file: changes/0003-AddCreatedByOnCrawlRequestSchema.yml
       relativeToChangelogFile: true
