@@ -105,7 +105,7 @@ databaseChangeLog:
               - column: { name: email, value: admin@example.com }
               - column: { name: username, value: admin }
               - column: { name: password_hash, value: $2a$10$Prjz/K65P7kwW/bEreO3huBuWnoXkuXlyX1USiJswk4aDnwdwBZfC } # bcrypt('admin123')
-              - column: { name: enabled, valueBoolean: true }
+              - column: { name: enabled, valueBoolean: "true" }
         - insert:
             tableName: user_roles
             columns:
