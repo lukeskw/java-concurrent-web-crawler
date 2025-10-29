@@ -1,6 +1,5 @@
 package com.concurrent_web_crawler.crawler.model;
 
-import com.concurrent_web_crawler.auth.model.UserAccount;
 import com.concurrent_web_crawler.crawler.enumerator.CrawlStatus;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
@@ -8,7 +7,6 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
-import org.springframework.data.annotation.CreatedBy;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.OffsetDateTime;
