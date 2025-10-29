@@ -1,25 +1,20 @@
+
 package com.concurrent_web_crawler.crawler.config;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.lang.NonNull;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.servlet.config.annotation.CorsRegistry;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
-import java.net.URI;
 import java.time.Duration;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 @Configuration
 public class WebConfig {
-
-    @Value("${server.port:4567}")
-
-    @Bean
-    public ExecutorService virtualThreadExecutor() {
-        return Executors.newVirtualThreadPerTaskExecutor();
-    }
 
     @Bean
     public RestTemplate restTemplate() {
@@ -29,21 +24,24 @@ public class WebConfig {
         return new RestTemplate(factory);
     }
 
-    @Bean
-    public URI baseUri(@Value("${crawler.base-url}") String baseUrl) {
-       // String value = baseUrlEnv != null ? baseUrlEnv : System.getenv("BASE_URL");
-       // if (value == null || value.isBlank()) {
-       //     throw new IllegalStateException("BASE_URL não definida. Ex: BASE_URL=http://hiring.axreng.com/");
-        //}
-        if (baseUrl == null || baseUrl.isBlank()) {
-            throw new IllegalStateException("BASE_URL não definida. Ex: BASE_URL=http://hiring.axreng.com/");
-        }
-        return URI.create(normalizeBase(baseUrl));
+    @Bean(destroyMethod = "shutdown")
+    public ExecutorService crawlerExecutorService() {
+        return Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
     }
 
-    private static String normalizeBase(String url) {
-        String s = url.trim();
-        if (!s.endsWith("/")) s = s + "/";
-        return s;
+    @Bean
+    public WebMvcConfigurer corsConfigurer() {
+        return new WebMvcConfigurer() {
+            @Override
+            public void addCorsMappings(@NonNull CorsRegistry registry) {
+                registry.addMapping("/**")
+                        .allowedOrigins("*")
+                        .allowedMethods("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
+                        .allowedHeaders("*")
+                        .exposedHeaders("Authorization")
+                        .maxAge(3600);
+            }
+        };
     }
+
 }
