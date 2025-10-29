@@ -8,7 +8,8 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpHeaders;
-import org.springframework.security.authentication.AbstractAuthenticationToken;
+import org.springframework.lang.NonNull;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -33,8 +34,16 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     }
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
+    protected void doFilterInternal(@NonNull HttpServletRequest request,
+                                    @NonNull HttpServletResponse response,
+                                    @NonNull FilterChain chain)
             throws ServletException, IOException {
+        String uri = request.getRequestURI();
+        if (uri.equals("/auth/login") || uri.equals("/auth/me") || uri.equals("/auth/logout") || uri.equals("/actuator/health")) {
+            chain.doFilter(request, response);
+            return;
+        }
+
         String header = request.getHeader(HttpHeaders.AUTHORIZATION);
         if (StringUtils.hasText(header) && header.startsWith("Bearer ")) {
             String token = header.substring(7);
@@ -46,14 +55,15 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                     return;
                 }
                 String subject = jws.getPayload().getSubject();
-                List<String> roles = (List<String>) jws.getPayload().get("roles", List.class);
-                Collection<GrantedAuthority> authorities = roles == null ? List.<GrantedAuthority>of()
-                        : roles.stream().map(SimpleGrantedAuthority::new).collect(Collectors.toList());
-                AbstractAuthenticationToken auth = new AbstractAuthenticationToken(authorities) {
-                    @Override public Object getCredentials() { return token; }
-                    @Override public Object getPrincipal() { return subject; }
-                };
-                auth.setAuthenticated(true);
+                Object rolesObj = jws.getPayload().get("roles");
+                List<String> roles = (rolesObj instanceof List<?> raw)
+                        ? raw.stream().map(String::valueOf).toList()
+                        : List.of();
+                Collection<GrantedAuthority> authorities = roles.stream()
+                        .map(SimpleGrantedAuthority::new)
+                        .collect(Collectors.toList());
+                UsernamePasswordAuthenticationToken auth =
+                        new UsernamePasswordAuthenticationToken(subject, null, authorities);
                 SecurityContextHolder.getContext().setAuthentication(auth);
             } catch (JwtException e) {
                 response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
